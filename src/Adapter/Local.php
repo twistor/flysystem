@@ -442,7 +442,13 @@ class Local extends AbstractAdapter
         $location = $file->getPathname();
         $path = $this->removePathPrefix($location);
 
-        return trim(str_replace('\\', '/', $path), '/');
+        if (Util::osIsWindows()) {
+            // @codeCoverageIgnoreStart
+            return trim($path, '\\/');
+            // @codeCoverageIgnoreEnd
+        }
+
+        return trim($path, '/');
     }
 
     /**
@@ -497,9 +503,13 @@ class Local extends AbstractAdapter
      */
     public function applyPathPrefix($path)
     {
-        $prefixedPath = parent::applyPathPrefix($path);
+        if (Util::osIsWindows()) {
+            // @codeCoverageIgnoreStart
+            $path = Util::normalizeWindowsPath($path);
+            // @codeCoverageIgnoreEnd
+        }
 
-        return str_replace('/', DIRECTORY_SEPARATOR, $prefixedPath);
+        return parent::applyPathPrefix($path);
     }
 
     /**

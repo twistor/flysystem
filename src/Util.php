@@ -82,19 +82,20 @@ class Util
     public static function normalizePath($path)
     {
         // Remove any kind of funky unicode whitespace
-        $normalized = preg_replace('#\p{C}+|^\./#u', '', $path);
-        $normalized = static::normalizeRelativePath($normalized);
+        $path = static::removeFunkyCharacters($path);
 
-        if (preg_match('#(^|/)\.{2}(/|$)#', $normalized)) {
-            throw new LogicException(
-                'Path is outside of the defined root, path: [' . $path . '], resolved: [' . $normalized . ']'
-            );
-        }
+        $path = static::normalizeRelativePath($path);
 
-        $normalized = preg_replace('#\\\{2,}#', '\\', trim($normalized, '\\'));
-        $normalized = preg_replace('#/{2,}#', '/', trim($normalized, '/'));
+        return static::removeFunkyCharacters($path);
+    }
 
-        return $normalized;
+    public static function normalizeWindowsPath($path)
+    {
+        $path = str_replace('\\', '/', $path);
+
+        $path = static::normalizeRelativePath($path);
+
+        return str_replace('/', '\\', $path);
     }
 
     /**
@@ -106,14 +107,41 @@ class Util
      */
     public static function normalizeRelativePath($path)
     {
-        // Path remove self referring paths ("/./").
-        $path = preg_replace('#/\.(?=/)|^\./|(/|^)\./?$#', '', $path);
+        $path_parts = [];
 
-        // Regex for resolving relative paths
-        $regex = '#/*[^/\.]+/\.\.(?=/|$)#Uu';
+        foreach (explode('/', $path) as $part) {
+          switch ($part) {
+            case '':
+            case '.':
+              break;
 
-        while (preg_match($regex, $path)) {
-            $path = preg_replace($regex, '', $path);
+            case '..':
+              if (empty($path_parts)) {
+                throw new LogicException(
+                    'Path is outside of the defined root, path: [' . $path . ']'
+                );
+              }
+              array_pop($path_parts);
+              break;
+
+            default:
+              $path_parts[] = $part;
+              break;
+          }
+        }
+
+        return implode('/', $path_parts);
+    }
+
+    public static function osIsWindows()
+    {
+        return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+    }
+
+    protected static function removeFunkyCharacters($path)
+    {
+        while (preg_match('#\p{C}+|^\./#u', $path)) {
+            $path = preg_replace('#\p{C}+|^\./#u', '', $path);
         }
 
         return $path;

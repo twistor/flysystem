@@ -3,6 +3,7 @@
 namespace League\Flysystem\Adapter;
 
 use League\Flysystem\Config;
+use League\Flysystem\Filesystem;
 
 function fopen($result, $mode)
 {
@@ -448,5 +449,17 @@ class LocalAdapterTests extends \PHPUnit_Framework_TestCase
     {
         $root = __DIR__ . '/files/fail.plz';
         new Local($root);
+    }
+
+    /**
+     * @expectedException \LogicException
+     */
+    public function testCannoutReadOutsideRoot()
+    {
+        $filesystem = new Filesystem(new Local(__DIR__ . '/files'));
+
+        $path = '..' . DIRECTORY_SEPARATOR . basename(__FILE__);
+
+        $filesystem->has($path);
     }
 }

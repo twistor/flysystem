@@ -104,21 +104,55 @@ class UtilTests extends \PHPUnit_Framework_TestCase
             ['/something/deep/../../dirname', 'dirname'],
             ['00004869/files/other/10-75..stl', '00004869/files/other/10-75..stl'],
             ['/dirname//subdir///subsubdir', 'dirname/subdir/subsubdir'],
-            ['\dirname\\\\subdir\\\\\\subsubdir', 'dirname\subdir\subsubdir'],
-            ['\\\\some\shared\\\\drive', 'some\shared\drive'],
-            ['C:\dirname\\\\subdir\\\\\\subsubdir', 'C:\dirname\subdir\subsubdir'],
-            ['C:\\\\dirname\subdir\\\\subsubdir', 'C:\dirname\subdir\subsubdir'],
+            ['\dirname\\\\subdir\\\\\\subsubdir', '\dirname\\\\subdir\\\\\\subsubdir'],
+            ['\\\\some\shared\\\\drive', '\\\\some\shared\\\\drive'],
+            ['C:\dirname\\\\subdir\\\\\\subsubdir', 'C:\dirname\\\\subdir\\\\\\subsubdir'],
+            ['C:\\\\dirname\subdir\\\\subsubdir', 'C:\\\\dirname\subdir\\\\subsubdir'],
             ['example/path/..txt', 'example/path/..txt'],
         ];
     }
 
+    public function windowsPathProvider()
+    {
+        return [
+            ['.', ''],
+            ['\path\to\dir\.', 'path\to\dir'],
+            ['\dirname\\', 'dirname'],
+            ['dirname\..', ''],
+            ['dirname\..\\', ''],
+            ['dirname.\\', 'dirname.'],
+            ['dirname\.\\', 'dirname'],
+            ['dirname\.', 'dirname'],
+            ['.\dir\..\.\.\\', ''],
+            ['\something\deep\..\..\dirname', 'dirname'],
+            ['00004869\files\other\10-75..stl', '00004869\files\other\10-75..stl'],
+            ['\dirname\subdir\subsubdir', 'dirname\subdir\subsubdir'],
+            ['\dirname\\\\subdir\\\\\\subsubdir', 'dirname\subdir\subsubdir'],
+            ['\\\\some\shared\\\\drive', 'some\shared\drive'],
+            ['C:\dirname\\\\subdir\\\\\\subsubdir', 'C:\dirname\subdir\subsubdir'],
+            ['C:\\\\dirname\subdir\\\\subsubdir', 'C:\dirname\subdir\subsubdir'],
+            ['example\path\..txt', 'example\path\..txt'],
+        ];
+    }
+
     /**
-     * @dataProvider  pathProvider
+     * @dataProvider pathProvider
      */
     public function testNormalizePath($input, $expected)
     {
         $result = Util::normalizePath($input);
         $double = Util::normalizePath(Util::normalizePath($input));
+        $this->assertEquals($expected, $result);
+        $this->assertEquals($expected, $double);
+    }
+
+    /**
+     * @dataProvider windowsPathProvider
+     */
+    public function testNormalizeWindowsPath($input, $expected)
+    {
+        $result = Util::normalizeWindowsPath($input);
+        $double = Util::normalizeWindowsPath(Util::normalizeWindowsPath($input));
         $this->assertEquals($expected, $result);
         $this->assertEquals($expected, $double);
     }
