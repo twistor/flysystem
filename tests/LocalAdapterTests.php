@@ -3,6 +3,7 @@
 namespace League\Flysystem\Adapter;
 
 use League\Flysystem\Config;
+use League\Flysystem\Filesystem;
 
 function fopen($result, $mode)
 {
@@ -210,6 +211,15 @@ class LocalAdapterTests extends \PHPUnit_Framework_TestCase
         $prefixed = $this->adapter->applyPathPrefix($path);
         $this->assertEquals($expected, $prefixed);
         $this->assertEquals($path, $this->adapter->removePathPrefix($prefixed));
+    }
+
+    public function testWindowsPrefixWithRootDir()
+    {
+        $path = 'c:/some/path.ext';
+
+        $this->adapter->setPathPrefix('');
+        $this->assertEquals($path, $this->adapter->applyPathPrefix($path));
+        $this->assertEquals($path, $this->adapter->removePathPrefix($path));
     }
 
     public function testGetPathPrefix()
@@ -465,5 +475,23 @@ class LocalAdapterTests extends \PHPUnit_Framework_TestCase
     {
         $root = __DIR__ . '/files/fail.plz';
         new Local($root);
+    }
+
+    public function testThing()
+    {
+        $rootPath = getcwd();
+
+        do {
+            $rootPath = dirname($rootPath);
+        } while (dirname($rootPath) !== $rootPath);
+
+        print $rootPath . "\n";
+
+        $adapter = new Local($rootPath);
+        $filesystem = new Filesystem($adapter);
+
+        print $adapter->applyPathPrefix('foo/bar.txt') . "\n";
+
+        print 'dirname:' . dirname('c:\\') . "\n";
     }
 }
