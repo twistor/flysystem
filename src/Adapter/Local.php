@@ -4,10 +4,7 @@ namespace League\Flysystem\Adapter;
 
 use DirectoryIterator;
 use FilesystemIterator;
-use finfo as Finfo;
-use League\Flysystem\AdapterInterface;
 use League\Flysystem\Config;
-use League\Flysystem\Exception;
 use League\Flysystem\NotSupportedException;
 use League\Flysystem\UnreadableFileException;
 use League\Flysystem\Util;
@@ -71,19 +68,20 @@ class Local extends AbstractAdapter
      *
      * @throws LogicException
      */
-    public function __construct($root, $writeFlags = LOCK_EX, $linkHandling = self::DISALLOW_LINKS, array $permissions = [])
+    public function __construct(string $root, int $writeFlags = LOCK_EX, int $linkHandling = self::DISALLOW_LINKS, array $permissions = [])
     {
-        $root = is_link($root) ? realpath($root) : $root;
         $this->permissionMap = array_replace_recursive(static::$permissions, $permissions);
-        $this->ensureDirectory($root);
+        $this->writeFlags = $writeFlags;
+        $this->linkHandling = $linkHandling;
 
-        if ( ! is_dir($root) || ! is_readable($root)) {
+        $resolved = is_link($root) ? realpath($root) : $root;
+        $this->ensureDirectory($resolved);
+
+        if ( ! is_readable($resolved)) {
             throw new LogicException('The root path ' . $root . ' is not readable.');
         }
 
-        $this->setPathPrefix($root);
-        $this->writeFlags = $writeFlags;
-        $this->linkHandling = $linkHandling;
+        $this->setPathPrefix($resolved);
     }
 
     /**
@@ -95,15 +93,17 @@ class Local extends AbstractAdapter
      *
      * @throws Exception in case the root directory can not be created
      */
-    protected function ensureDirectory($root)
+    protected function ensureDirectory(string $directory, int $permissions = 0)
     {
-        if ( ! is_dir($root)) {
+        $permissions = $permissions ?: $this->permissionMap['dir']['public'];
+
+        if ( ! is_dir($directory)) {
             $umask = umask(0);
-            @mkdir($root, $this->permissionMap['dir']['public'], true);
+            @mkdir($directory, $permissions, true);
             umask($umask);
 
-            if ( ! is_dir($root)) {
-                throw new Exception(sprintf('Impossible to create the root directory "%s".', $root));
+            if ( ! is_dir($directory)) {
+                throw new \RuntimeException(sprintf('Impossible to create the directory "%s".', $directory));
             }
         }
     }
@@ -111,125 +111,133 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function has($path)
+    public function hasDir(string $path, Config $config): bool
     {
-        $location = $this->applyPathPrefix($path);
-
-        return file_exists($location);
+        return is_dir($this->applyPathPrefix($path));
     }
 
     /**
      * @inheritdoc
      */
-    public function write($path, $contents, Config $config)
+    public function hasFile(string $path, Config $config): bool
     {
-        $location = $this->applyPathPrefix($path);
-        $this->ensureDirectory(dirname($location));
-
-        if (($size = file_put_contents($location, $contents, $this->writeFlags)) === false) {
-            return false;
-        }
-
-        $type = 'file';
-        $result = compact('contents', 'type', 'size', 'path');
-
-        if ($visibility = $config->get('visibility')) {
-            $result['visibility'] = $visibility;
-            $this->setVisibility($path, $visibility);
-        }
-
-        return $result;
+        return is_file($this->applyPathPrefix($path));
     }
 
     /**
      * @inheritdoc
      */
-    public function writeStream($path, $resource, Config $config)
+    public function put(string $path, string $contents, Config $config): array
     {
         $location = $this->applyPathPrefix($path);
-        $this->ensureDirectory(dirname($location));
-        $stream = fopen($location, 'w+b');
 
-        if ( ! $stream) {
-            return false;
-        }
-
-        stream_copy_to_stream($resource, $stream);
-
-        if ( ! fclose($stream)) {
-            return false;
-        }
-
-        if ($visibility = $config->get('visibility')) {
-            $this->setVisibility($path, $visibility);
-        }
-
-        $type = 'file';
-
-        return compact('type', 'path', 'visibility');
+        return $this->writeFileContents($location, $contents, $config);
     }
 
     /**
      * @inheritdoc
      */
-    public function readStream($path)
+    public function putStream(string $path, $resource, Config $config): array
     {
         $location = $this->applyPathPrefix($path);
-        $stream = fopen($location, 'rb');
 
-        return ['type' => 'file', 'path' => $path, 'stream' => $stream];
+        return $this->writeStreamContents($location, $resource, $config);
     }
 
     /**
      * @inheritdoc
      */
-    public function updateStream($path, $resource, Config $config)
+    public function update(string $path, string $contents, Config $config): array
     {
-        return $this->writeStream($path, $resource, $config);
+        $location = $this->applyPathPrefix($path);
+
+        $this->assertFilePresent($location);
+
+        return $this->writeFileContents($location, $contents, $config);
     }
 
     /**
      * @inheritdoc
      */
-    public function update($path, $contents, Config $config)
+    public function updateStream(string $path, $resource, Config $config): array
     {
         $location = $this->applyPathPrefix($path);
-        $mimetype = Util::guessMimeType($path, $contents);
-        $size = file_put_contents($location, $contents, $this->writeFlags);
 
-        if ($size === false) {
-            return false;
-        }
+        $this->assertFilePresent($location);
 
-        $type = 'file';
-
-        return compact('type', 'path', 'size', 'contents', 'mimetype');
+        return $this->writeStreamContents($location, $resource, $config);
     }
 
     /**
      * @inheritdoc
      */
-    public function read($path)
+    public function write(string $path, string $contents, Config $config): array
     {
         $location = $this->applyPathPrefix($path);
-        $contents = file_get_contents($location);
+
+        $this->assertFileAbsent($location);
+
+        return $this->writeFileContents($location, $contents, $config);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function writeStream(string $path, $resource, Config $config): array
+    {
+        $location = $this->applyPathPrefix($path);
+
+        $this->assertFileAbsent($location);
+
+        return $this->writeStreamContents($location, $resource, $config);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function read(string $path, Config $config): array
+    {
+        $location = $this->applyPathPrefix($path);
+
+        $contents = @file_get_contents($location);
 
         if ($contents === false) {
-            return false;
+            $this->assertFilePresent($location);
+            throw new UnreadableFileException($path);
         }
 
-        return ['type' => 'file', 'path' => $path, 'contents' => $contents];
+        return ['type' => 'file', 'contents' => $contents];
     }
 
     /**
      * @inheritdoc
      */
-    public function rename($path, $newpath)
+    public function readStream(string $path, Config $config): array
+    {
+        $stream = @fopen($this->applyPathPrefix($path), 'rb');
+
+        if ($string === false) {
+            $this->assertFilePresent($location);
+            throw new UnreadableFileException($path);
+        }
+
+        return ['type' => 'file', 'stream' => $stream];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function rename(string $path, string $newpath): bool
     {
         $location = $this->applyPathPrefix($path);
         $destination = $this->applyPathPrefix($newpath);
-        $parentDirectory = $this->applyPathPrefix(Util::dirname($newpath));
-        $this->ensureDirectory($parentDirectory);
+
+        $this->assertFilePresent($location);
+        $this->assertFileAbsent($destination);
+
+        $perms = fileperms(dirname($location));
+
+        $this->ensureDirectory(dirname($destination), $perms);
 
         return rename($location, $destination);
     }
@@ -237,11 +245,17 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function copy($path, $newpath)
+    public function copy(string $path, string$newpath): bool
     {
         $location = $this->applyPathPrefix($path);
         $destination = $this->applyPathPrefix($newpath);
-        $this->ensureDirectory(dirname($destination));
+
+        $this->assertFilePresent($location);
+        $this->assertFileAbsent($destination);
+
+        $perms = fileperms(dirname($location));
+
+        $this->ensureDirectory(dirname($destination), $perms);
 
         return copy($location, $destination);
     }
@@ -249,136 +263,7 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function delete($path)
-    {
-        $location = $this->applyPathPrefix($path);
-
-        return unlink($location);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function listContents($directory = '', $recursive = false)
-    {
-        $result = [];
-        $location = $this->applyPathPrefix($directory);
-
-        if ( ! is_dir($location)) {
-            return [];
-        }
-
-        $iterator = $recursive ? $this->getRecursiveDirectoryIterator($location) : $this->getDirectoryIterator($location);
-
-        foreach ($iterator as $file) {
-            $path = $this->getFilePath($file);
-
-            if (preg_match('#(^|/|\\\\)\.{1,2}$#', $path)) {
-                continue;
-            }
-
-            $result[] = $this->normalizeFileInfo($file);
-        }
-
-        return array_filter($result);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function getMetadata($path)
-    {
-        $location = $this->applyPathPrefix($path);
-        $info = new SplFileInfo($location);
-
-        return $this->normalizeFileInfo($info);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function getSize($path)
-    {
-        return $this->getMetadata($path);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function getMimetype($path)
-    {
-        $location = $this->applyPathPrefix($path);
-        $finfo = new Finfo(FILEINFO_MIME_TYPE);
-        $mimetype = $finfo->file($location);
-
-        if (in_array($mimetype, ['application/octet-stream', 'inode/x-empty'])) {
-            $mimetype = Util\MimeType::detectByFilename($location);
-        }
-
-        return ['path' => $path, 'type' => 'file', 'mimetype' => $mimetype];
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function getTimestamp($path)
-    {
-        return $this->getMetadata($path);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function getVisibility($path)
-    {
-        $location = $this->applyPathPrefix($path);
-        clearstatcache(false, $location);
-        $permissions = octdec(substr(sprintf('%o', fileperms($location)), -4));
-        $visibility = $permissions & 0044 ? AdapterInterface::VISIBILITY_PUBLIC : AdapterInterface::VISIBILITY_PRIVATE;
-
-        return compact('path', 'visibility');
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function setVisibility($path, $visibility)
-    {
-        $location = $this->applyPathPrefix($path);
-        $type = is_dir($location) ? 'dir' : 'file';
-        $success = chmod($location, $this->permissionMap[$type][$visibility]);
-
-        if ($success === false) {
-            return false;
-        }
-
-        return compact('path', 'visibility');
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function createDir($dirname, Config $config)
-    {
-        $location = $this->applyPathPrefix($dirname);
-        $umask = umask(0);
-        $visibility = $config->get('visibility', 'public');
-
-        if ( ! is_dir($location) && ! mkdir($location, $this->permissionMap['dir'][$visibility], true)) {
-            $return = false;
-        } else {
-            $return = ['path' => $dirname, 'type' => 'dir'];
-        }
-
-        umask($umask);
-
-        return $return;
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function deleteDir($dirname)
+    public function deleteDir(string $dirname): bool
     {
         $location = $this->applyPathPrefix($dirname);
 
@@ -395,6 +280,82 @@ class Local extends AbstractAdapter
         }
 
         return rmdir($location);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function deleteFile(string $path): bool
+    {
+        $location = $this->applyPathPrefix($path);
+
+        return unlink($location);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function listContents(string $directory, bool $recursive, Config $config): array
+    {
+        $result = [];
+        $location = $this->applyPathPrefix($directory);
+
+        if ( ! is_dir($location)) {
+            throw new FileNotFoundException($directory);
+        }
+
+        $iterator = $recursive ? $this->getRecursiveDirectoryIterator($location) : $this->getDirectoryIterator($location);
+
+        foreach ($iterator as $file) {
+            $result[] = $this->normalizeFileInfo($file);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getMetadata(string $path, Config $config): MetadataInterface
+    {
+        $location = $this->applyPathPrefix($path);
+
+        $this->assertFilePresent($location);
+
+        return new LocalMetaData(new SplFileInfo($location));
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setVisibility(string $path, string $visibility): bool
+    {
+        $location = $this->applyPathPrefix($path);
+
+        $type = is_dir($location) ? 'dir' : 'file';
+
+        return chmod($location, $this->permissionMap[$type][$visibility]);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function createDir(string $dirname, Config $config): bool
+    {
+        $location = $this->applyPathPrefix($dirname);
+
+        if (file_exists($location)) {
+            throw new FileExistsException($dirname);
+        }
+
+        $umask = umask(0);
+
+        $visibility = $config->get('visibility', 'public');
+        $success = mkdir($location, $this->permissionMap['dir'][$visibility], true);
+
+        umask($umask);
+
+        return $success;
     }
 
     /**
@@ -443,8 +404,7 @@ class Local extends AbstractAdapter
      */
     protected function getFilePath(SplFileInfo $file)
     {
-        $location = $file->getPathname();
-        $path = $this->removePathPrefix($location);
+        $path = $this->removePathPrefix($file->getPathname());
 
         return trim(str_replace('\\', '/', $path), '/');
     }
@@ -455,7 +415,7 @@ class Local extends AbstractAdapter
      *
      * @return RecursiveIteratorIterator
      */
-    protected function getRecursiveDirectoryIterator($path, $mode = RecursiveIteratorIterator::SELF_FIRST)
+    protected function getRecursiveDirectoryIterator(string $path, $mode = RecursiveIteratorIterator::SELF_FIRST)
     {
         return new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
@@ -505,6 +465,82 @@ class Local extends AbstractAdapter
     {
         if ( ! $file->isReadable()) {
             throw UnreadableFileException::forFileInfo($file);
+        }
+    }
+
+    protected function writeFileContents(string $location, string $contents, Config $config): array
+    {
+        $this->ensureDirectory(dirname($location));
+
+        if (($size = file_put_contents($location, $contents, $this->writeFlags)) === false) {
+            return [];
+        }
+
+        $type = 'file';
+        $result = compact('contents', 'type', 'size');
+
+        if ($visibility = $config->get('visibility')) {
+            $result['visibility'] = $visibility;
+            $this->setVisibility($path, $visibility);
+        }
+
+        return $result;
+    }
+
+    protected function writeStreamContents(string $location, $stream, Config $config): array
+    {
+        $this->ensureDirectory(dirname($location));
+        $stream = fopen($location, 'w+b');
+
+        if ( ! $stream) {
+            return [];
+        }
+
+        stream_copy_to_stream($resource, $stream);
+
+        if ( ! fclose($stream)) {
+            return false;
+        }
+
+        $result = ['type' => 'file'];
+
+        if ($visibility = $config->get('visibility')) {
+            $result['visibility'] = $visibility;
+            $this->setVisibility($path, $visibility);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Asserts a file is present.
+     *
+     * @param string $location path to file
+     *
+     * @throws FileNotFoundException
+     *
+     * @return void
+     */
+    public function assertFilePresent(string $location)
+    {
+        if ( ! is_file($location)) {
+            throw new FileNotFoundException($this->removePathPrefix($location));
+        }
+    }
+
+    /**
+     * Asserts a file is absent.
+     *
+     * @param string $location path to file
+     *
+     * @throws FileExistsException
+     *
+     * @return void
+     */
+    public function assertFileAbsent(string $location)
+    {
+        if (is_file($location)) {
+            throw new FileExistsException($this->removePathPrefix($location));
         }
     }
 }

@@ -2,6 +2,8 @@
 
 namespace League\Flysystem;
 
+use League\Flysystem\Adapter\MetadataInterface;
+
 interface FilesystemInterface
 {
     /**
@@ -11,7 +13,8 @@ interface FilesystemInterface
      *
      * @return bool
      */
-    public function has($path);
+    public function hasDir(string $path, array $config = []): bool;
+    public function hasFile(string $path, array $config = []): bool;
 
     /**
      * Read a file.
@@ -22,7 +25,7 @@ interface FilesystemInterface
      *
      * @return string|false The file contents or false on failure.
      */
-    public function read($path);
+    public function read(string $path, array $config = []): string;
 
     /**
      * Retrieves a read-stream for a path.
@@ -33,7 +36,7 @@ interface FilesystemInterface
      *
      * @return resource|false The path resource or false on failure.
      */
-    public function readStream($path);
+    public function readStream(string $path, array $config = []);
 
     /**
      * List contents of a directory.
@@ -43,7 +46,7 @@ interface FilesystemInterface
      *
      * @return array A list of file metadata.
      */
-    public function listContents($directory = '', $recursive = false);
+    public function listContents(string $directory = '', bool $recursive = false, array $config = []): array;
 
     /**
      * Get a file's metadata.
@@ -54,49 +57,7 @@ interface FilesystemInterface
      *
      * @return array|false The file metadata or false on failure.
      */
-    public function getMetadata($path);
-
-    /**
-     * Get a file's size.
-     *
-     * @param string $path The path to the file.
-     *
-     * @return int|false The file size or false on failure.
-     */
-    public function getSize($path);
-
-    /**
-     * Get a file's mime-type.
-     *
-     * @param string $path The path to the file.
-     *
-     * @throws FileNotFoundException
-     *
-     * @return string|false The file mime-type or false on failure.
-     */
-    public function getMimetype($path);
-
-    /**
-     * Get a file's timestamp.
-     *
-     * @param string $path The path to the file.
-     *
-     * @throws FileNotFoundException
-     *
-     * @return string|false The timestamp or false on failure.
-     */
-    public function getTimestamp($path);
-
-    /**
-     * Get a file's visibility.
-     *
-     * @param string $path The path to the file.
-     *
-     * @throws FileNotFoundException
-     *
-     * @return string|false The visibility (public|private) or false on failure.
-     */
-    public function getVisibility($path);
+    public function getMetadata(string $path, array $config = []): MetadataInterface;
 
     /**
      * Write a new file.
@@ -109,7 +70,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function write($path, $contents, array $config = []);
+    public function write(string $path, string $contents, array $config = []): bool;
 
     /**
      * Write a new file using a stream.
@@ -123,7 +84,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function writeStream($path, $resource, array $config = []);
+    public function writeStream(string $path, $resource, array $config = []): bool;
 
     /**
      * Update an existing file.
@@ -136,7 +97,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function update($path, $contents, array $config = []);
+    public function update(string $path, string $contents, array $config = []): bool;
 
     /**
      * Update an existing file using a stream.
@@ -150,7 +111,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function updateStream($path, $resource, array $config = []);
+    public function updateStream(string $path, $resource, array $config = []): bool;
 
     /**
      * Rename a file.
@@ -163,7 +124,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function rename($path, $newpath);
+    public function rename(string $path, string $newpath): bool;
 
     /**
      * Copy a file.
@@ -176,7 +137,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function copy($path, $newpath);
+    public function copy(string $path, string $newpath): bool;
 
     /**
      * Delete a file.
@@ -187,28 +148,28 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function delete($path);
+    public function deleteFile(string $path): bool;
 
     /**
      * Delete a directory.
      *
-     * @param string $dirname
+     * @param string $path
      *
-     * @throws RootViolationException Thrown if $dirname is empty.
+     * @throws RootViolationException Thrown if $path is empty.
      *
      * @return bool True on success, false on failure.
      */
-    public function deleteDir($dirname);
+    public function deleteDir(string $path): bool;
 
     /**
      * Create a directory.
      *
-     * @param string $dirname The name of the new directory.
+     * @param string $path The name of the new directory.
      * @param array  $config  An optional configuration array.
      *
      * @return bool True on success, false on failure.
      */
-    public function createDir($dirname, array $config = []);
+    public function createDir(string $path, array $config = []): bool;
 
     /**
      * Set the visibility for a file.
@@ -218,7 +179,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function setVisibility($path, $visibility);
+    public function setVisibility(string $path, string $visibility): bool;
 
     /**
      * Create a file or update if exists.
@@ -229,7 +190,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function put($path, $contents, array $config = []);
+    public function put(string $path, string $contents, array $config = []): bool;
 
     /**
      * Create a file or update if exists.
@@ -242,28 +203,7 @@ interface FilesystemInterface
      *
      * @return bool True on success, false on failure.
      */
-    public function putStream($path, $resource, array $config = []);
-
-    /**
-     * Read and delete a file.
-     *
-     * @param string $path The path to the file.
-     *
-     * @throws FileNotFoundException
-     *
-     * @return string|false The file contents, or false on failure.
-     */
-    public function readAndDelete($path);
-
-    /**
-     * Get a file/directory handler.
-     *
-     * @param string  $path    The path to the file.
-     * @param Handler $handler An optional existing handler to populate.
-     *
-     * @return Handler Either a file or directory handler.
-     */
-    public function get($path, Handler $handler = null);
+    public function putStream(string $path, $resource, array $config = []): bool;
 
     /**
      * Register a plugin.
@@ -272,5 +212,5 @@ interface FilesystemInterface
      *
      * @return $this
      */
-    public function addPlugin(PluginInterface $plugin);
+    public function addPlugin(PluginInterface $plugin): self;
 }

@@ -9,7 +9,7 @@ class File extends Handler
      *
      * @return bool
      */
-    public function exists()
+    public function exists(): bool
     {
         return $this->filesystem->has($this->path);
     }
@@ -19,7 +19,7 @@ class File extends Handler
      *
      * @return string file contents
      */
-    public function read()
+    public function read(): string
     {
         return $this->filesystem->read($this->path);
     }

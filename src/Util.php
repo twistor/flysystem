@@ -79,21 +79,7 @@ class Util
      *
      * @return string
      */
-    public static function normalizePath($path)
-    {
-        return static::normalizeRelativePath($path);
-    }
-
-    /**
-     * Normalize relative directories in a path.
-     *
-     * @param string $path
-     *
-     * @throws LogicException
-     *
-     * @return string
-     */
-    public static function normalizeRelativePath($path)
+    public static function normalizePath(string $path): string
     {
         $path = str_replace('\\', '/', $path);
         $path = static::removeFunkyWhiteSpace($path);
