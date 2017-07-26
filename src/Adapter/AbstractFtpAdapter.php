@@ -1,11 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace League\Flysystem\Adapter;
 
 use DateTime;
 use League\Flysystem\AdapterInterface;
+use League\Flysystem\Adapter\DirectoryMetadata;
 use League\Flysystem\Config;
-use League\Flysystem\NotSupportedException;
+use League\Flysystem\Exception\DirectoryCreationFailedException;
+use League\Flysystem\Exception\NotSupportedException;
 use League\Flysystem\SafeStorage;
 use RuntimeException;
 
@@ -378,7 +382,7 @@ abstract class AbstractFtpAdapter extends AbstractAdapter
      *
      * @throws NotSupportedException
      */
-    protected function normalizeObject($item, $base)
+    protected function normalizeObject(string $item, string $base)
     {
         $systemType = $this->systemType ?: $this->detectSystemType($item);
 
@@ -412,14 +416,13 @@ abstract class AbstractFtpAdapter extends AbstractAdapter
         $path = empty($base) ? $name : $base . $this->separator . $name;
 
         if ($type === 'dir') {
-            return compact('type', 'path');
+            return new DirectoryMetadata();
         }
 
         $permissions = $this->normalizePermissions($permissions);
         $visibility = $permissions & 0044 ? AdapterInterface::VISIBILITY_PUBLIC : AdapterInterface::VISIBILITY_PRIVATE;
-        $size = (int) $size;
 
-        return compact('type', 'path', 'visibility', 'size');
+        return new StaticMetadata((int) $size, null, $visibility);
     }
 
     /**
@@ -447,16 +450,12 @@ abstract class AbstractFtpAdapter extends AbstractAdapter
         $timestamp = $dt ? $dt->getTimestamp() : (int) strtotime("$date $time");
 
         if ($size === '<DIR>') {
-            $type = 'dir';
-
-            return compact('type', 'path', 'timestamp');
+            return new DirectoryMetadata(null, $timestamp);
         }
 
-        $type = 'file';
         $visibility = AdapterInterface::VISIBILITY_PUBLIC;
-        $size = (int) $size;
 
-        return compact('type', 'path', 'visibility', 'size', 'timestamp');
+        return new StaticMetadata((int) $size, $timestamp, $visibility);
     }
 
     /**
@@ -534,25 +533,25 @@ abstract class AbstractFtpAdapter extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function has($path)
+    public function hasDir(string $path, Config $config): bool
     {
-        return $this->getMetadata($path);
+        try {
+            return $this->getMetadata($path)->getType() === 'dir';
+        } catch (FileNotFoundException $e) {
+            return false;
+        }
     }
 
     /**
      * @inheritdoc
      */
-    public function getSize($path)
+    public function hasFile(string $path, Config $config): bool
     {
-        return $this->getMetadata($path);
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function getVisibility($path)
-    {
-        return $this->getMetadata($path);
+        try {
+            return $this->getMetadata($path)->getType() === 'file';
+        } catch (FileNotFoundException $e) {
+            return false;
+        }
     }
 
     /**
@@ -562,8 +561,12 @@ abstract class AbstractFtpAdapter extends AbstractAdapter
      */
     public function ensureDirectory($dirname)
     {
-        if ( ! empty($dirname) && ! $this->has($dirname)) {
-            $this->createDir($dirname, new Config());
+        if ($dirname === '' || $this->hasDir($dirname)) {
+            return;
+        }
+
+        if ( ! $this->createDir($dirname, new Config())) {
+            throw new DirectoryCreationFailedException($dirname);
         }
     }
 

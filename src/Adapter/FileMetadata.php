@@ -3,33 +3,36 @@
 namespace League\Flysystem\Adapter;
 
 use League\Flysystem\AdapterInterface;
-use SplFileInfo;
 
-class LocalMetadata implements MetadataInterface
+class FileMetadata implements MetadataInterface
 {
-    private $info;
+    private $size = 0;
+
+    private $timestamp = 0;
+
+    private $visibility = 'public';
 
     public function __construct(SplFileInfo $info)
     {
         $this->info = $info;
     }
 
-    public function getSize(): ?int
+    public function getSize(): int
     {
-        return $this->info->getSize();
+        return $this->size;
     }
 
-    public function getTimestamp(): ?int
+    public function getTimestamp(): int
     {
-        return $this->info->getMTime();
+        return $this->timestamp;
     }
 
     public function getType(): string
     {
-        return $this->info->getType();
+        return 'file';
     }
 
-    public function getVisibility(): ?string
+    public function getVisibility(): string
     {
         $permissions = octdec(substr(decoct($this->info->getPerms()), -4));
 

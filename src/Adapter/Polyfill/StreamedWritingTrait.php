@@ -19,11 +19,10 @@ trait StreamedWritingTrait
      */
     protected function stream($path, $resource, Config $config, $fallback)
     {
-        Util::rewindStream($resource);
         $contents = stream_get_contents($resource);
         $fallbackCall = [$this, $fallback];
 
-        return call_user_func($fallbackCall, $path, $contents, $config);
+        return $fallbackCall($path, $contents, $config);
     }
 
     /**

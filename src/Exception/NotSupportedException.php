@@ -1,6 +1,6 @@
 <?php
 
-namespace League\Flysystem;
+namespace League\Flysystem\Exception;
 
 use RuntimeException;
 use SplFileInfo;

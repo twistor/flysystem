@@ -1,12 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace League\Flysystem\Adapter;
 
 use DirectoryIterator;
 use FilesystemIterator;
+use League\Flysystem\Adapter\LocalMetadata;
 use League\Flysystem\Config;
-use League\Flysystem\NotSupportedException;
-use League\Flysystem\UnreadableFileException;
+use League\Flysystem\Exception\FileExistsException;
+use League\Flysystem\Exception\FileNotFoundException;
+use League\Flysystem\Exception\NotSupportedException;
+use League\Flysystem\Exception\UnreadableFileException;
 use League\Flysystem\Util;
 use LogicException;
 use RecursiveDirectoryIterator;
@@ -127,7 +132,7 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function put(string $path, string $contents, Config $config): array
+    public function put(string $path, string $contents, Config $config): ?array
     {
         $location = $this->applyPathPrefix($path);
 
@@ -137,7 +142,7 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function putStream(string $path, $resource, Config $config): array
+    public function putStream(string $path, $resource, Config $config): ?array
     {
         $location = $this->applyPathPrefix($path);
 
@@ -147,7 +152,7 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function update(string $path, string $contents, Config $config): array
+    public function update(string $path, string $contents, Config $config): ?array
     {
         $location = $this->applyPathPrefix($path);
 
@@ -159,7 +164,7 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function updateStream(string $path, $resource, Config $config): array
+    public function updateStream(string $path, $resource, Config $config): ?array
     {
         $location = $this->applyPathPrefix($path);
 
@@ -171,7 +176,7 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function write(string $path, string $contents, Config $config): array
+    public function write(string $path, string $contents, Config $config): ?array
     {
         $location = $this->applyPathPrefix($path);
 
@@ -183,7 +188,7 @@ class Local extends AbstractAdapter
     /**
      * @inheritdoc
      */
-    public function writeStream(string $path, $resource, Config $config): array
+    public function writeStream(string $path, $resource, Config $config): ?array
     {
         $location = $this->applyPathPrefix($path);
 
@@ -206,7 +211,7 @@ class Local extends AbstractAdapter
             throw new UnreadableFileException($path);
         }
 
-        return ['type' => 'file', 'contents' => $contents];
+        return ['contents' => $contents];
     }
 
     /**
@@ -221,7 +226,7 @@ class Local extends AbstractAdapter
             throw new UnreadableFileException($path);
         }
 
-        return ['type' => 'file', 'stream' => $stream];
+        return ['stream' => $stream];
     }
 
     /**
@@ -322,7 +327,7 @@ class Local extends AbstractAdapter
 
         $this->assertFilePresent($location);
 
-        return new LocalMetaData(new SplFileInfo($location));
+        return new LocalMetadata(new SplFileInfo($location));
     }
 
     /**
@@ -468,48 +473,43 @@ class Local extends AbstractAdapter
         }
     }
 
-    protected function writeFileContents(string $location, string $contents, Config $config): array
+    protected function writeFileContents(string $location, string $contents, Config $config): ?array
     {
         $this->ensureDirectory(dirname($location));
 
-        if (($size = file_put_contents($location, $contents, $this->writeFlags)) === false) {
-            return [];
+        if (false === $size = file_put_contents($location, $contents, $this->writeFlags)) {
+            return;
         }
 
-        $type = 'file';
-        $result = compact('contents', 'type', 'size');
-
         if ($visibility = $config->get('visibility')) {
-            $result['visibility'] = $visibility;
             $this->setVisibility($path, $visibility);
         }
 
-        return $result;
+        return ['size' => $size, 'visibility' => $visibility];
     }
 
-    protected function writeStreamContents(string $location, $stream, Config $config): array
+    protected function writeStreamContents(string $location, $resource, Config $config): ?array
     {
         $this->ensureDirectory(dirname($location));
-        $stream = fopen($location, 'w+b');
+        $destination = fopen($location, 'w+b');
 
-        if ( ! $stream) {
-            return [];
+        if ( ! $destination) {
+            return;
         }
 
-        stream_copy_to_stream($resource, $stream);
-
-        if ( ! fclose($stream)) {
-            return false;
+        if (false === $size = stream_copy_to_stream($resource, $destination)) {
+            return;
         }
 
-        $result = ['type' => 'file'];
+        if ( ! fclose($destination)) {
+            return;
+        }
 
         if ($visibility = $config->get('visibility')) {
-            $result['visibility'] = $visibility;
             $this->setVisibility($path, $visibility);
         }
 
-        return $result;
+        return return ['size' => $size, 'visibility' => $visibility];
     }
 
     /**

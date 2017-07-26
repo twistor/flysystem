@@ -1,10 +1,8 @@
 <?php
 
-namespace League\Flysystem;
+namespace League\Flysystem\Exception;
 
-use Exception as BaseException;
-
-class FileExistsException extends Exception
+class DirectoryCreationFailedException extends FileActionFailedException
 {
     /**
      * @var string
@@ -22,7 +20,7 @@ class FileExistsException extends Exception
     {
         $this->path = $path;
 
-        parent::__construct('File already exists at path: ' . $this->getPath(), $code, $previous);
+        parent::__construct('Failed to create directory: ' . $this->getPath(), $code, $previous);
     }
 
     /**

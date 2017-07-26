@@ -2,7 +2,7 @@
 
 namespace League\Flysystem\Plugin;
 
-use League\Flysystem\FileNotFoundException;
+use League\Flysystem\Exception\FileNotFoundException;
 
 class ForcedCopy extends AbstractPlugin
 {

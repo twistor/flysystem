@@ -1,12 +1,10 @@
 <?php
 
-namespace League\Flysystem;
+namespace League\Flysystem\Exception;
 
-use SplFileInfo;
-
-class UnreadableFileException extends Exception
+class UnreadableFileException extends FileActionFailedException
 {
-    public static function forFileInfo(SplFileInfo $fileInfo)
+    public static function forFileInfo(\SplFileInfo $fileInfo)
     {
         return new static(
             sprintf(

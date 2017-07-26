@@ -1,10 +1,8 @@
 <?php
 
-namespace League\Flysystem;
+namespace League\Flysystem\Exception;
 
-use Exception as BaseException;
-
-class FileNotFoundException extends Exception
+class FileNotFoundException extends FileActionFailedException
 {
     /**
      * @var string

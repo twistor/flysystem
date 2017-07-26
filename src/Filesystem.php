@@ -1,9 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace League\Flysystem;
 
 use InvalidArgumentException;
+use League\Flysystem\Adapter\DirectoryMetadata;
 use League\Flysystem\Adapter\MetadataInterface;
+use League\Flysystem\Exception\RootViolationException;
 use League\Flysystem\Path;
 use League\Flysystem\Plugin\PluggableTrait;
 
@@ -35,16 +39,6 @@ class Filesystem implements FilesystemInterface
     {
         $this->adapter = $adapter;
         $this->setConfig($config);
-    }
-
-    /**
-     * Get the Adapter.
-     *
-     * @return AdapterInterface adapter
-     */
-    protected function getAdapter(): AdapterInterface
-    {
-        return $this->adapter;
     }
 
     /**
@@ -162,11 +156,12 @@ class Filesystem implements FilesystemInterface
      */
     public function read(string $path, array $config = [])
     {
-        if ( ! ($object = $this->getAdapter()->read(new Path($path)))) {
-            return false;
-        }
+        $path = Util::normalizePath($path);
+        $config = $this->prepareConfig($config);
 
-        return $object['contents'];
+        $object = $this->getAdapter()->read($path, $config);
+
+        return $object['contents'] ?? false;
     }
 
     /**
@@ -175,12 +170,11 @@ class Filesystem implements FilesystemInterface
     public function readStream(string $path, array $config = [])
     {
         $path = Util::normalizePath($path);
+        $config = $this->prepareConfig($config);
 
-        if ( ! $object = $this->getAdapter()->readStream($path)) {
-            return false;
-        }
+        $object = $this->getAdapter()->readStream($path, $config);
 
-        return $object['stream'];
+        return $object['stream'] ?? false;
     }
 
     /**
@@ -198,7 +192,9 @@ class Filesystem implements FilesystemInterface
             throw new RootViolationException('The root directory can not be overwritten.');
         }
 
-        return $this->getAdapter()->rename($path, $newpath);
+        $config = $this->prepareConfig($config);
+
+        return $this->getAdapter()->rename($path, $newpath, $config);
     }
 
     /**
@@ -216,7 +212,9 @@ class Filesystem implements FilesystemInterface
             throw new RootViolationException('The root directory can not be overwritten.');
         }
 
-        return $this->getAdapter()->copy($path, $newpath);
+        $config = $this->prepareConfig($config);
+
+        return $this->getAdapter()->copy($path, $newpath, $config);
     }
 
     /**
@@ -225,8 +223,9 @@ class Filesystem implements FilesystemInterface
     public function deleteFile(string $path, array $config = []): bool
     {
         $path = Util::normalizePath($path);
+        $config = $this->prepareConfig($config);
 
-        return $this->getAdapter()->delete($path);
+        return $this->getAdapter()->deleteFile($path, $config);
     }
 
     /**
@@ -240,7 +239,9 @@ class Filesystem implements FilesystemInterface
             throw new RootViolationException('The root directory can not be deleted.');
         }
 
-        return (bool) $this->getAdapter()->deleteDir($path);
+        $config = $this->prepareConfig($config);
+
+        return (bool) $this->getAdapter()->deleteDir($path, $config);
     }
 
     /**
@@ -260,8 +261,9 @@ class Filesystem implements FilesystemInterface
     public function listContents(string $path = '', bool $recursive = false, array $config = []): array
     {
         $path = Util::normalizePath($path);
+        $config = $this->prepareConfig($config);
 
-        return $this->getAdapter()->listContents($path, $recursive);
+        return $this->getAdapter()->listContents($path, $recursive, $config);
     }
 
     /**
@@ -271,7 +273,13 @@ class Filesystem implements FilesystemInterface
     {
         $path = Util::normalizePath($path);
 
-        return $this->getAdapter()->getMetadata($path);
+        if ($path === '') {
+            return new DirectoryMetadata();
+        }
+
+        $config = $this->prepareConfig($config);
+
+        return $this->getAdapter()->getMetadata($path, $config);
     }
 
     /**
@@ -280,7 +288,18 @@ class Filesystem implements FilesystemInterface
     public function setVisibility(string $path, string $visibility, array $config = []): bool
     {
         $path = Util::normalizePath($path);
+        $config = $this->prepareConfig($config);
 
-        return $this->getAdapter()->setVisibility($path, $visibility);
+        return $this->getAdapter()->setVisibility($path, $visibility, $config);
+    }
+
+    /**
+     * Get the Adapter.
+     *
+     * @return AdapterInterface adapter
+     */
+    protected function getAdapter(): AdapterInterface
+    {
+        return $this->adapter;
     }
 }
